@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><!= title || "My Application" !></title>
+
+    <!-- tailwind css -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+    <style>
+      .highlight {
+        background-color: yellow;
+        border-radius: 4px;
+        padding: 2px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+      }
+      .highlight:hover {
+        background-color: gold;
+        transition: cubic-bezier(0.075, 0.82, 0.165, 1);
+      }
+
+      #highlightModal {
+        border: 0;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 8px 30px rgb(0 0 0 / 25%);
+      }
+
+      #highlightModal::backdrop {
+        background: rgb(0 0 0 / 45%);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav class="flex gap-4 p-4">
+        <a href="/" class="bg-blue-100 p-2">Home</a>
+        <a href="/register" class="bg-blue-100 p-2">Register</a>
+        <a href="/login" class="bg-blue-100 p-2">Login</a>
+        <a href="/profile/ali" class="bg-blue-100 p-2">profile</a>
+        <a href="/story/goose" class="bg-blue-100 p-2">story</a>
+        <a href="/ai/chat/4" class="bg-blue-100 p-2">ai chat</a>
+      </nav>
+    </header>
+
+    <main>
+      <%- body %>
+    </main>
+
+    <footer>
+      <p>&copy; 2026 My Application</p>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,303 @@
+<% layout("layouts/main") %>
+
+<div>
+  <h1>Thi is a story:</h1>
+  <p class="text-xl font-bold p-2 bg-red-100" id="story">
+    The golden key is missing. That is a boomer.
+    <span>fuck.</span>
+  </p>
+  <button id="hi">highlight</button>
+</div>
+
+<dialog id="highlightModal" class="mx-auto my-auto">
+  <div class="flex flex-col gap-2">
+    <a href="/ai/chat/2">ai chat</a>
+    <p>You clicked a highlighted part.</p>
+    <button class="delete">delete highlight</button>
+    <button id="closeModal" type="button">Close</button>
+  </div>
+</dialog>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    let text;
+    let range = null; // current selected range
+    let globalStartOffset = null;
+    let globalEndOffset = null;
+    const storyEl = document.getElementById("story");
+
+    // const btn = document.getElementById("hi");
+    function doHighlight() {
+      if (!range || globalStartOffset === null || globalEndOffset === null) {
+        console.log("Select some story text first");
+        return;
+      }
+      // if: overlap -> true
+      const overlap = doesItOverlap(range);
+
+      // if overlap with old highlight
+      if (overlap) {
+        globalStartOffset = null;
+        globalEndOffset = null;
+        range = null;
+        console.log("can not highlight this");
+        return;
+      }
+
+      wrapGlobalRangeInSpan(storyEl, globalStartOffset, globalEndOffset);
+      globalStartOffset = null;
+      globalEndOffset = null;
+      range = null;
+      // console.log(text);
+    }
+
+    // check if already highlighted
+    function doesItOverlap(range) {
+      if (!range) {
+        console.log("empty new range", range);
+        return true;
+      }
+      // get existing highlights
+      const existingHighlights = storyEl.querySelectorAll("span.highlight");
+
+      console.log(existingHighlights);
+      for (const highlight of existingHighlights) {
+        // get the range of highlighted text
+        const oldRange = document.createRange();
+        oldRange.selectNodeContents(highlight);
+
+        console.log(oldRange);
+
+        // compare the end of new_range to the start of highlight -- returns -1, 0, +1
+        // -1 first range comes before the second
+        // ranges are equal
+        // +1 first range start after the second
+        /*
+        overlap when:
+        text1 starts before text2 ends
+        text1 ends after the text2 starts
+                 fun
+        google is fun
+
+        */
+        //range.start < oldRange.end  &&  range.end > oldRange.start
+
+        // range.start is before oldRange.end
+        // if a.start was at or after b.end -- then a was entirely to the right of b -- so: no overlap
+
+        const startBeforeEnd =
+          range.compareBoundaryPoints(Range.START_TO_END, oldRange) > 0; //1
+        // range.end is after oldRange.start
+        // so: if a.end was before or at b.start -- a was to the left of b so no overlap
+        const endAfterStart =
+          range.compareBoundaryPoints(Range.END_TO_START, oldRange) < 0; //-1
+
+        console.log(range.startContainer.textContent);
+        console.log(range.startOffset);
+        console.log(range.endOffset);
+        console.log(oldRange.startOffset);
+        console.log(oldRange.endOffset);
+        console.log(oldRange.startContainer.textContent);
+        console.log(
+          range.compareBoundaryPoints(Range.START_TO_END, oldRange),
+          range.compareBoundaryPoints(Range.END_TO_START, oldRange),
+        );
+        console.log(startBeforeEnd, endAfterStart);
+        const overlaps = startBeforeEnd && endAfterStart;
+
+        if (overlaps) return overlaps; // return only if found an overlap
+      }
+
+      return false; // no overlap found
+    }
+
+    // take story_container, start, end offsets -- and wrap it's text inside a span
+    function wrapGlobalRangeInSpan(container, startOffset, endOffset) {
+      // a walker can find all the #text_nodes inside story
+      const walker = document.createTreeWalker(
+        container,
+        NodeFilter.SHOW_TEXT, // only text node
+      );
+
+      // store text nodes
+      const textNodes = [];
+      let node; // current node in our loop
+
+      // loop stops when .nextNode() does not return a node
+      while ((node = walker.nextNode())) {
+        textNodes.push(node);
+      }
+
+      // console.log(textNodes);
+
+      // find #text_node and it's selection point, from the globalOffset
+      function findPosition(globalOffset) {
+        // number of chars from start of the story -- we add #text_node length here
+        let charSeen = 0;
+
+        // go over all #text nodes
+        for (const textNode of textNodes) {
+          // each node text length
+          const nodeLen = textNode.textContent.length;
+
+          // if: globalOffset <= charSeen + nodeLen
+          // 12 <= 0 + 15 -- if first #text.length = 15 -- so: global offset is within the first node
+          if (globalOffset <= charSeen + nodeLen) {
+            // return the text node and it's offset
+            return {
+              node: textNode,
+              // 12 - 0 = 12 and 17 - 15 = 2
+              // so: we can local index within the #text_node
+              offset: globalOffset - charSeen,
+            };
+          }
+
+          // increment charSeen by next node length, to move to the next node
+          charSeen += nodeLen;
+        }
+
+        throw new Error("global offset is outside the text in container");
+      }
+
+      // now: we create a new selection range
+      const start = findPosition(startOffset);
+      const end = findPosition(endOffset);
+
+      const range = document.createRange();
+      range.setStart(start.node, start.offset);
+      range.setEnd(end.node, end.offset);
+
+      const span = document.createElement("span");
+      span.className = "highlight";
+
+      // move the text between the offsets into the span
+      span.appendChild(range.extractContents());
+
+      // insert the span back into that range
+      range.insertNode(span);
+      return span;
+    }
+
+    function getGlobalOffset(
+      container, // div story
+      node, // is the #text node, that story starts or ends
+      // position inside that node. 0, 1, 2, 3, 4
+      //                                        start position
+      offset,
+    ) {
+      // check if #text_node is inside div_story and container !== our node
+      if (!container.contains(node) && container !== node) {
+        // selection is outside of container
+        throw new Error("Selection endpoint is outside the story container");
+      }
+
+      // this is for measuring, start to end
+      const range = document.createRange();
+
+      // start with all the content of story div
+      range.selectNodeContents(container);
+
+      // move the end of measuring range/tool, to start or end selection index, inside each #text_node
+      range.setEnd(node, offset);
+
+      // now we have a range, or selected text from start of the story to selection_index
+      // get selected text, and count the length -- gets you the global position
+      return range.toString().length;
+    }
+
+    // console.log(storyEl);
+
+    // document.addEventListener("selectionchange", () => {
+    storyEl.addEventListener("mouseup", () => {
+      const selection = window.getSelection();
+
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0)
+        return;
+
+      const selectedRange = selection.getRangeAt(0);
+
+      // Ignore a caret, or a selection outside the story
+      if (
+        !storyEl.contains(selectedRange.startContainer) ||
+        !storyEl.contains(selectedRange.endContainer)
+      ) {
+        return;
+      }
+
+      // range = selection.getRangeAt(0);
+      // copy
+      range = selectedRange.cloneRange();
+      // highlighted text
+      text = selection?.toString() ?? "";
+
+      // console.log(selection.rangeCount);
+      // console.log(range);
+
+      // const txt = range.startContainer.textContent;
+      // console.log(JSON.stringify(txt));
+
+      // console.log(text);
+      const selectStartNode = range.startContainer;
+      const selectEndNode = range.endContainer;
+      const selectStartOffset = range.startOffset;
+      const selectEndOffset = range.endOffset;
+
+      // start global offset
+      globalStartOffset = getGlobalOffset(
+        storyEl, // parent
+        selectStartNode, // selection node
+        selectStartOffset, // index from start of #text_node to start of selection
+      );
+
+      // end global offset
+      globalEndOffset = getGlobalOffset(
+        storyEl, // parent
+        selectEndNode, // selection node
+        selectEndOffset, // index from start of #text_node to start of selection
+      );
+
+      doHighlight();
+
+      // console.log(startGlobalOffset);
+      // console.log(endGlobalOffset);
+
+      // wrapGlobalRangeInSpan(storyEl, startGlobalOffset, endGlobalOffset);
+    });
+
+    // modal logic
+    const modal = document.getElementById("highlightModal");
+    const deleteBtn = document.querySelector("#highlightModal button.delete");
+
+    let activeHighlight = null;
+
+    // let activeHighlightSpan = null;
+
+    // open modal logic
+    storyEl.addEventListener("click", (event) => {
+      const highlight = event.target.closest("span.highlight");
+
+      if (!highlight || !storyEl.contains(highlight)) return;
+
+      activeHighlight = highlight;
+
+      modal.showModal();
+    });
+
+    deleteBtn.addEventListener("click", () => {
+      if (!activeHighlight) return;
+
+      console.log(activeHighlight.childNodes);
+      // replace the span with its contents, keeping the text
+      activeHighlight.replaceWith(...activeHighlight.childNodes);
+
+      activeHighlight = null;
+      modal.close();
+    });
+
+    // close modal logic
+    document.getElementById("closeModal").addEventListener("click", () => {
+      modal.close();
+      activeHighlight = null;
+    });
+  });
+</script>
